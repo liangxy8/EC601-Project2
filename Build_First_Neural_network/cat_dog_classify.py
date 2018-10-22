@@ -4,6 +4,8 @@ import os
 import numpy as np
 from random import shuffle
 from tqdm import tqdm
+import cv2
+import matplotlib.pyplot as plt
 
 #from tensorflow.examples.tutorials.mnist import input_data
 # number 1 to 10 data
@@ -12,11 +14,11 @@ from tqdm import tqdm
 # check the images of cat and dog
 CATEGORIES = ['Dog', 'Cat']
 Num_categories = len(CATEGORIES)
-Train_dir = '/home/lxy/GitHub/EC601-Project2/Build_First_Neural_network/train.zip'
-Test_dir = '/home/lxy/GitHub/EC601-Project2/Build_First_Neural_network/test.zip'
+Train_dir = '/home/lxy/GitHub/EC601-Project2/Build_First_Neural_network/train'
+Test_dir = '/home/lxy/GitHub/EC601-Project2/Build_First_Neural_network/test'
 
 
-def label_image(image):
+def label_image(img):
     word_label = img.split('.')[-3]
     if word_label == 'cat':
         return [1,0]
@@ -25,11 +27,11 @@ def label_image(image):
 
 def creat_train_data():
     #converts the data into array data of the image and its label.
-    training_date = []
+    training_data = []
     for img in tqdm(os.listdir(Train_dir)):
         label = label_image(img)
         path = os.path.join(Train_dir, img)
-        img = cv2.imread(path.cv2.IMREAD_GRAYSCALE)
+        img = cv2.imread(path,cv2.IMREAD_GRAYSCALE)
         img = cv2.resize(img, (50,50))
         training_data.append([np.array(img), np.array(label)])
     shuffle(training_data)
@@ -40,7 +42,6 @@ def process_test_data():
     #This is the actual competition test data, NOT the data that we'll use to check the accuracy of our algorithm as we test. This data has no label
     testing_data = []
     for img in tqdm(os.listdir(Tesr_dir)):
-        #label = label_image(img)
         path = os.path.join(Test_dir, img)
         img_num = img.split('.')[0]
         img = cv2.imread(path,cv2.IMREAD_GRAYSCALE)
@@ -51,7 +52,60 @@ def process_test_data():
     return testing_data
 
 # run the training
-train_data = creat_train_data()
+#train_data = creat_train_data()
+train_data = np.load('train_data.npy')
+
+
+
+# define our neural network
+import tflearn
+from tflearn.layers.conv import conv_2d, max_pool_2d
+from tflearn.layers.core import input_data, dropout, fully_connected
+from tflearn.layers.estimator import regression
+
+convnet = input_data(shape=[None, 50, 50, 1], name='input')
+
+convnet = conv_2d(convnet, 32, 5, activation='relu')
+convnet = max_pool_2d(convnet, 5)
+
+convnet = conv_2d(convnet, 64, 5, activation='relu')
+convnet = max_pool_2d(convnet, 5)
+
+convnet = fully_connected(convnet, 1024, activation='relu')
+convnet = dropout(convnet, 0.8)
+
+convnet = fully_connected(convnet, 2, activation='softmax')
+convnet = regression(convnet, optimizer='adam', learning_rate=1e-3, loss='categorical_crossentropy', name='targets')
+
+model = tflearn.DNN(convnet, tensorboard_dir='log')
+
+
+
+# set the model name
+MODEL_NAME = 'dog_cat_classification-{}-{}.model'.format(1e-3, '2_layers')
+print(MODEL_NAME)
+if os.path.exists('{}.meta'.format(MODEL_NAME)):
+    model.load(MODEL_NAME)
+    print('model loaded!')
+
+# split out training and testing data
+train = train_data[:-500]
+test = train_data[-500:]
+
+# create our data arrays, X is the images data, Y is the label
+X = np.array([i[0] for i in train]).reshape(-1,50,50,1)
+Y = [i[1] for i in train]
+
+# for testing accuarcy, with label
+test_x = np.array([i[0] for i in test]).reshape(-1,50,50,1)
+test_y= [i[1] for i in test]
+
+# fit for 2 epochs
+model.fit({'input':X},{'targets':Y}, n_epoch=2, validation_set=({'input':test_x},{'targets':test_y}),
+        snapshot_step=50000, show_metric=True, run_id=MODEL_NAME)
+
+
+
 
 
 
@@ -75,13 +129,13 @@ train_data = creat_train_data()
 #    result = sess.run(accuracy, feed_dict={xs: v_xs, ys: v_ys})
 #    return result
 #
-#
+##
 ## define placeholder for inputs to network
-#xs = tf.placeholder(tf.float32,[None,784]) #28*28
-#ys = tf.placeholder(tf.float32,[None,10])
+#xs = tf.placeholder(tf.float32,[None,2500]) #50*50
+#ys = tf.placeholder(tf.float32,[None,2])
 #
 ## add output layer
-#prediction = add_layer(xs, 784, 10, activation_function=tf.nn.softmax)
+#prediction = add_layer(xs, 2500, 2, activation_function=tf.nn.softmax)
 #
 ## the error between prediction and real data
 #cross_entropy = tf.reduce_mean(-tf.reduce_sum(ys * tf.log(prediction),
@@ -92,9 +146,9 @@ train_data = creat_train_data()
 #sess.run(tf.initialize_all_variables())
 #
 #for i in range(1000):
-#    batch_xs, batch_ys = mnist.train.next_batch(100)
+#    batch_xs, batch_ys = train.next_batch(100)
 #    sess.run(train_step, feed_dict={xs:batch_xs,ys:batch_ys})
 #    if i%50 == 0:
-#        print(computer_accuracy(mnist.test.images, mnist.test.labels))
-#        print(batch_xs, batch_ys)
+#        print(computer_accuracy(test_x, test_y))
+##        print(batch_xs, batch_ys)
 #
