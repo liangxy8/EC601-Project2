@@ -7,9 +7,6 @@ from tqdm import tqdm
 import cv2
 import matplotlib.pyplot as plt
 
-#from tensorflow.examples.tutorials.mnist import input_data
-# number 1 to 10 data
-#mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
 
 # check the images of cat and dog
 CATEGORIES = ['Dog', 'Cat']
@@ -41,12 +38,12 @@ def creat_train_data():
 def process_test_data():
     #This is the actual competition test data, NOT the data that we'll use to check the accuracy of our algorithm as we test. This data has no label
     testing_data = []
-    for img in tqdm(os.listdir(Tesr_dir)):
+    for img in tqdm(os.listdir(Test_dir)):
         path = os.path.join(Test_dir, img)
         img_num = img.split('.')[0]
         img = cv2.imread(path,cv2.IMREAD_GRAYSCALE)
         img = cv2.resize(img,(50,50))
-        resting_data.append([np.array(img),img_num])
+        testing_data.append([np.array(img),img_num])
     shuffle(testing_data)
     np.save('test_data.npy', testing_data)
     return testing_data
@@ -62,8 +59,15 @@ import tflearn
 from tflearn.layers.conv import conv_2d, max_pool_2d
 from tflearn.layers.core import input_data, dropout, fully_connected
 from tflearn.layers.estimator import regression
+tf.reset_default_graph()
 
 convnet = input_data(shape=[None, 50, 50, 1], name='input')
+
+convnet = conv_2d(convnet, 32, 5, activation='relu')
+convnet = max_pool_2d(convnet, 5)
+
+convnet = conv_2d(convnet, 64, 5, activation='relu')
+convnet = max_pool_2d(convnet, 5)
 
 convnet = conv_2d(convnet, 32, 5, activation='relu')
 convnet = max_pool_2d(convnet, 5)
@@ -102,8 +106,37 @@ test_y= [i[1] for i in test]
 
 # fit for 2 epochs
 model.fit({'input':X},{'targets':Y}, n_epoch=2, validation_set=({'input':test_x},{'targets':test_y}),
-        snapshot_step=50000, show_metric=True, run_id=MODEL_NAME)
+        snapshot_step=500, show_metric=True, run_id=MODEL_NAME)
 
+# save my model
+model.save(MODEL_NAME)
+
+# visually inspecting our network against unlabeled data
+import matplotlib.pyplot as plt
+
+if os.path.exists('test_data.npy'):
+    test_data = np.load('test_data.npy')
+else:
+    test_data = process_test_data()
+
+fig = plt.figure()
+for num, data in enumerate(test_data[:12]):   # cat:[1,0], dog:[0,1]
+    img_num = data[1]
+    img_data = data[0]
+    
+    y = fig.add_subplot(3,4,num+1)
+    orig = img_data
+    data = img_data.reshape(50,50,1)
+    model_out = model.predict([data])[0]
+
+    if np.argmax(model_out) == 1: str_label='Dog'
+    else: str_label='Cat'
+    
+    y.imshow(orig,cmap='gray')
+    plt.title(str_label)
+    y.axes.get_xaxis().set_visible(False)
+    y.axes.get_yaxis().set_visible(False)
+plt.show()
 
 
 
